@@ -1,6 +1,8 @@
 #pragma once
 #include "../core/Types.h"
 
+namespace mmo::ecs { class World; }
+
 namespace mmo::render {
     class RHI {
     public:
@@ -9,5 +11,6 @@ namespace mmo::render {
         virtual void Shutdown() = 0;
         virtual void BeginFrame() = 0;
         virtual void EndFrame() = 0;
+        virtual void RenderEntities(mmo::ecs::World& ecsWorld) = 0;
     };
 }

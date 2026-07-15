@@ -41,11 +41,13 @@ namespace mmo::core {
             if (net) {
                 net->Update();
             }
+            if (rhi) {
+                rhi->BeginFrame();
+            }
             if (onUpdate) {
                 onUpdate();
             }
             if (rhi) {
-                rhi->BeginFrame();
                 rhi->EndFrame();
             }
         }

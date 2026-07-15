@@ -4,7 +4,16 @@
 #include <vector>
 #include <SDL2/SDL.h>
 
+#include "../ecs/World.h"
+#include "../ecs/Components.h"
+
 namespace mmo::render {
+
+    struct PushConstantData {
+        float x;
+        float y;
+    };
+
     class VulkanBackend : public RHI {
     public:
         VulkanBackend();
@@ -14,19 +23,19 @@ namespace mmo::render {
         void Shutdown() override;
         void BeginFrame() override;
         void EndFrame() override;
+        void RenderEntities(mmo::ecs::World& ecsWorld);
 
     private:
         SDL_Window* m_window = nullptr;
 
         VkInstance m_instance = VK_NULL_HANDLE;
-        VkSurfaceKHR m_surface = VK_NULL_HANDLE;
         VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
         VkDevice m_device = VK_NULL_HANDLE;
-        
         uint32_t m_graphicsQueueFamily = -1;
         uint32_t m_presentQueueFamily = -1;
         VkQueue m_graphicsQueue = VK_NULL_HANDLE;
         VkQueue m_presentQueue = VK_NULL_HANDLE;
+        VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 
         VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
         VkFormat m_swapchainImageFormat;
@@ -36,6 +45,9 @@ namespace mmo::render {
         std::vector<VkFramebuffer> m_swapchainFramebuffers;
 
         VkRenderPass m_renderPass = VK_NULL_HANDLE;
+        VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+        VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
+        
         VkCommandPool m_commandPool = VK_NULL_HANDLE;
         VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
 
@@ -52,6 +64,8 @@ namespace mmo::render {
         bool CreateSwapchain();
         bool CreateImageViews();
         bool CreateRenderPass();
+        bool CreateGraphicsPipeline();
+        VkShaderModule CreateShaderModule(const std::vector<char>& code);
         bool CreateFramebuffers();
         bool CreateCommandPool();
         bool CreateCommandBuffer();

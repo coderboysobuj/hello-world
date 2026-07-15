@@ -10,6 +10,7 @@
     "sol2",
     "vulkan-headers",
     "vulkan-memory-allocator",
-    "gamenetworkingsockets"
+    "gamenetworkingsockets",
+    "glslang"
   ]
 }

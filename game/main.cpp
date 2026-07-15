@@ -77,6 +77,8 @@ int main(int argc, char* argv[]) {
             inputPacket.inputY = inY;
             netManager->SendMessage(&inputPacket, sizeof(inputPacket));
         }
+
+        vulkanBackend.RenderEntities(ecsWorld);
     });
 
     // Cleanup
