@@ -1,0 +1,15 @@
+{
+  "name": "mmo-engine",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "entt",
+    {
+      "name": "sdl2",
+      "features": ["vulkan"]
+    },
+    "sol2",
+    "vulkan-headers",
+    "vulkan-memory-allocator",
+    "gamenetworkingsockets"
+  ]
+}
