@@ -101,17 +101,20 @@ int main(int argc, char* argv[]) {
     app.Run(&vulkanBackend, netManager, [&]() {
         float inX = 0.0f;
         float inY = 0.0f;
+        bool jump = false;
         if (app.IsKeyPressed(SDL_SCANCODE_W)) inY = -1.0f;
         if (app.IsKeyPressed(SDL_SCANCODE_S)) inY = 1.0f;
         if (app.IsKeyPressed(SDL_SCANCODE_A)) inX = -1.0f;
         if (app.IsKeyPressed(SDL_SCANCODE_D)) inX = 1.0f;
+        if (app.IsKeyPressed(SDL_SCANCODE_SPACE)) jump = true;
 
-        if (inX != 0.0f || inY != 0.0f) {
+        if (inX != 0.0f || inY != 0.0f || jump) {
             mmo::network::PlayerInputPacket inputPacket;
             inputPacket.header.opcode = mmo::network::OpCode::PlayerInput;
             inputPacket.header.size = sizeof(mmo::network::PlayerInputPacket);
             inputPacket.inputX = inX;
             inputPacket.inputY = inY;
+            inputPacket.jump = jump;
             netManager->SendMessage(&inputPacket, sizeof(inputPacket));
         }
 

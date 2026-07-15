@@ -13,6 +13,7 @@
     "gamenetworkingsockets",
     "glslang",
     "cpr",
-    "glm"
+    "glm",
+    "reactphysics3d"
   ]
 }

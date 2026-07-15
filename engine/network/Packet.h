@@ -25,6 +25,7 @@ namespace mmo::network {
         PacketHeader header;
         float inputX; // -1 to 1 (A/D)
         float inputY; // -1 to 1 (W/S)
+        bool jump;    // Spacebar
     };
 
     struct SpawnEntityPacket {

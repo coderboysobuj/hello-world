@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+namespace reactphysics3d { class RigidBody; }
+
 namespace mmo::ecs {
     struct TransformComponent {
         float x = 0.0f;
@@ -10,5 +12,9 @@ namespace mmo::ecs {
 
     struct NetworkComponent {
         uint32_t networkId = 0;
+    };
+
+    struct PhysicsComponent {
+        reactphysics3d::RigidBody* body = nullptr;
     };
 }

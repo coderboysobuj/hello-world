@@ -390,7 +390,7 @@ namespace mmo::render {
 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         inputAssembly.primitiveRestartEnable = VK_FALSE;
 
         VkViewport viewport{};
@@ -590,7 +590,8 @@ namespace mmo::render {
     void VulkanBackend::RenderEntities(mmo::ecs::World& ecsWorld) {
         vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, -5.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        // Camera slightly above and behind, looking down at the center, matching the Unity screenshot
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 5.0f, 12.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 proj = glm::perspective(glm::radians(45.0f), 
                                           m_swapchainExtent.width / (float) m_swapchainExtent.height, 
                                           0.1f, 100.0f);
@@ -598,13 +599,31 @@ namespace mmo::render {
         proj[1][1] *= -1;
 
         auto ecsView = ecsWorld.GetRegistry().view<mmo::ecs::TransformComponent>();
+        
+        // 1. Draw a floor (scaled cube on the X-Z plane, like the Unity plane)
+        glm::mat4 floorModel = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f));
+        floorModel = glm::scale(floorModel, glm::vec3(10.0f, 0.1f, 10.0f));
+        PushConstantData floorPc;
+        floorPc.mvp = proj * view * floorModel;
+        floorPc.colorMultiplier = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f); // Light gray floor like Unity
+        vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &floorPc);
+        vkCmdDraw(m_commandBuffer, 36, 1, 0, 0);
+
+        // 2. Draw Entities (Characters)
+        float time = SDL_GetTicks() / 1000.0f; // Get time for animation
+
         for (auto entity : ecsView) {
             auto& transform = ecsView.get<mmo::ecs::TransformComponent>(entity);
             
+            // Render character exactly at its physics transform
             glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(transform.x, transform.y, transform.z));
+            
+            // Add a slow rotation around the Y axis so the user can easily see it is a 3D cube!
+            model = glm::rotate(model, time * 1.5f, glm::vec3(0.0f, 1.0f, 0.0f)); 
             
             PushConstantData pc;
             pc.mvp = proj * view * model;
+            pc.colorMultiplier = glm::vec4(0.2f, 0.5f, 1.0f, 1.0f); // Blue character
             
             vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &pc);
             vkCmdDraw(m_commandBuffer, 36, 1, 0, 0); // Drawing a 36-vertex cube

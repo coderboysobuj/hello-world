@@ -14,6 +14,7 @@ namespace mmo::render {
 
     struct PushConstantData {
         glm::mat4 mvp;
+        glm::vec4 colorMultiplier;
     };
 
     class VulkanBackend : public RHI {

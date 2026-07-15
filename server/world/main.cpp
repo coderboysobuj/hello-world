@@ -6,6 +6,9 @@
 #include "../engine/network/Packet.h"
 #include "../engine/ecs/World.h"
 #include "../engine/ecs/Components.h"
+#include <reactphysics3d/reactphysics3d.h>
+
+namespace rp3d = reactphysics3d;
 
 int main(int argc, char* argv[]) {
     std::cout << "Starting MMO World Server...\n";
@@ -21,6 +24,22 @@ int main(int argc, char* argv[]) {
     std::unordered_map<uint64_t, entt::entity> clientMap;
     uint32_t nextNetworkId = 1000;
 
+    // Initialize Physics
+    rp3d::PhysicsCommon physicsCommon;
+    rp3d::PhysicsWorld::WorldSettings settings;
+    settings.gravity = rp3d::Vector3(0, -9.81, 0);
+    rp3d::PhysicsWorld* physicsWorld = physicsCommon.createPhysicsWorld(settings);
+
+    // Create Floor
+    rp3d::Vector3 floorPosition(0, -2.0, 0);
+    rp3d::Quaternion floorOrientation = rp3d::Quaternion::identity();
+    rp3d::Transform floorTransform(floorPosition, floorOrientation);
+    rp3d::RigidBody* floorBody = physicsWorld->createRigidBody(floorTransform);
+    floorBody->setType(rp3d::BodyType::STATIC);
+    // Extents are half-sizes! 10x0.1x10 floor -> 5x0.05x5
+    rp3d::BoxShape* floorShape = physicsCommon.createBoxShape(rp3d::Vector3(5.0, 0.05, 5.0));
+    floorBody->addCollider(floorShape, rp3d::Transform::identity());
+
     netManager->SetConnectionCallbacks(
         [&](uint64_t connectionId) {
             std::cout << "Client " << connectionId << " connected. Waiting for authentication...\n";
@@ -28,6 +47,12 @@ int main(int argc, char* argv[]) {
         [&](uint64_t connectionId) {
             auto it = clientMap.find(connectionId);
             if (it != clientMap.end()) {
+                if (ecsWorld.GetRegistry().all_of<mmo::ecs::PhysicsComponent>(it->second)) {
+                    auto& physComp = ecsWorld.GetComponent<mmo::ecs::PhysicsComponent>(it->second);
+                    if (physComp.body) {
+                        physicsWorld->destroyRigidBody(physComp.body);
+                    }
+                }
                 ecsWorld.DestroyEntity(it->second);
                 clientMap.erase(it);
                 std::cout << "Client " << connectionId << " disconnected and entity destroyed.\n";
@@ -47,7 +72,23 @@ int main(int argc, char* argv[]) {
                 std::cout << "Client " << connectionId << " authenticated successfully with token: " << token << "\n";
                 
                 auto playerEntity = ecsWorld.CreateEntity();
-                ecsWorld.AddComponent<mmo::ecs::TransformComponent>(playerEntity, 0.0f, 0.0f, 0.0f);
+                ecsWorld.AddComponent<mmo::ecs::TransformComponent>(playerEntity, 0.0f, 2.0f, 0.0f);
+                
+                // Add Physics Body
+                rp3d::Vector3 startPos(0.0, 2.0, 0.0);
+                rp3d::Transform playerTransform(startPos, rp3d::Quaternion::identity());
+                rp3d::RigidBody* playerBody = physicsWorld->createRigidBody(playerTransform);
+                playerBody->setType(rp3d::BodyType::DYNAMIC);
+                
+                // Prevent character from tumbling like dice
+                playerBody->setAngularLockAxisFactor(rp3d::Vector3(0, 0, 0));
+                
+                // Add collision shape for player (0.5 half extents for 1x1x1 cube)
+                rp3d::BoxShape* playerShape = physicsCommon.createBoxShape(rp3d::Vector3(0.5, 0.5, 0.5));
+                playerBody->addCollider(playerShape, rp3d::Transform::identity());
+
+                ecsWorld.AddComponent<mmo::ecs::PhysicsComponent>(playerEntity, playerBody);
+
                 uint32_t netId = ++nextNetworkId;
                 ecsWorld.AddComponent<mmo::ecs::NetworkComponent>(playerEntity, netId);
                 
@@ -58,7 +99,7 @@ int main(int argc, char* argv[]) {
                 packet.header.size = sizeof(mmo::network::SpawnEntityPacket);
                 packet.networkId = netId;
                 packet.x = 0.0f;
-                packet.y = 0.0f;
+                packet.y = 2.0f;
                 packet.z = 0.0f;
 
                 netManager->SendMessage(&packet, sizeof(packet));
@@ -70,10 +111,22 @@ int main(int argc, char* argv[]) {
             const auto* packet = static_cast<const mmo::network::PlayerInputPacket*>(data);
             auto it = clientMap.find(connectionId);
             if (it != clientMap.end()) {
-                auto& transform = ecsWorld.GetComponent<mmo::ecs::TransformComponent>(it->second);
-                const float speed = 0.1f;
-                transform.x += packet->inputX * speed;
-                transform.y += packet->inputY * speed;
+                auto& physComp = ecsWorld.GetComponent<mmo::ecs::PhysicsComponent>(it->second);
+                if (physComp.body) {
+                    rp3d::Vector3 vel = physComp.body->getLinearVelocity();
+                    const float moveSpeed = 5.0f;
+                    vel.x = packet->inputX * moveSpeed;
+                    vel.z = packet->inputY * moveSpeed;
+
+                    if (packet->jump) {
+                        // Apply a jump impulse if not already moving much upwards
+                        if (vel.y < 0.1f) {
+                            vel.y = 5.0f;
+                        }
+                    }
+
+                    physComp.body->setLinearVelocity(vel);
+                }
             }
         }
     });
@@ -86,6 +139,22 @@ int main(int argc, char* argv[]) {
 
     while (isRunning) {
         auto tickStart = std::chrono::steady_clock::now();
+
+        // Step Physics
+        physicsWorld->update(1.0f / 60.0f);
+
+        // Sync Physics to Transform
+        auto physView = ecsWorld.GetRegistry().view<mmo::ecs::TransformComponent, mmo::ecs::PhysicsComponent>();
+        for (auto entity : physView) {
+            auto& transform = physView.get<mmo::ecs::TransformComponent>(entity);
+            auto& physComp = physView.get<mmo::ecs::PhysicsComponent>(entity);
+            if (physComp.body) {
+                const rp3d::Transform& pt = physComp.body->getTransform();
+                transform.x = pt.getPosition().x;
+                transform.y = pt.getPosition().y;
+                transform.z = pt.getPosition().z;
+            }
+        }
 
         netManager->Update();
 
