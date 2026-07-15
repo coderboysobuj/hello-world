@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cstring>
+#include <cpr/cpr.h>
 #include <SDL2/SDL.h>
 #include "../engine/core/Application.h"
 #include "../engine/network/NetworkManager.h"
@@ -52,7 +54,42 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    // 1. Authenticate with Go Login Service
+    std::cout << "Authenticating...\n";
+    cpr::Response r = cpr::Post(cpr::Url{"http://localhost:8080/login"},
+                                cpr::Body{"{\"username\":\"testuser\",\"password\":\"password123\"}"},
+                                cpr::Header{{"Content-Type", "application/json"}});
+
+    if (r.status_code != 200) {
+        std::cerr << "Authentication failed! Status: " << r.status_code << "\n";
+        return -1;
+    }
+
+    // Very simple token extraction (In a real app, use a JSON parser like nlohmann-json)
+    std::string token = "";
+    size_t tokenPos = r.text.find("\"token\":\"");
+    if (tokenPos != std::string::npos) {
+        tokenPos += 9;
+        size_t endPos = r.text.find("\"", tokenPos);
+        token = r.text.substr(tokenPos, endPos - tokenPos);
+    }
+
+    if (token.empty()) {
+        std::cerr << "Failed to parse token from response.\n";
+        return -1;
+    }
+    std::cout << "Authenticated! Token: " << token << "\n";
+
+    // 2. Connect to World Server
     netManager->Connect("127.0.0.1", 27015);
+
+    // 3. Send AuthPacket
+    mmo::network::AuthPacket authPacket;
+    authPacket.header.opcode = mmo::network::OpCode::Auth;
+    authPacket.header.size = sizeof(mmo::network::AuthPacket);
+    std::strncpy(authPacket.token, token.c_str(), sizeof(authPacket.token) - 1);
+    authPacket.token[sizeof(authPacket.token) - 1] = '\0';
+    netManager->SendMessage(&authPacket, sizeof(authPacket));
 
     // Initialize Vulkan RHI
     mmo::render::VulkanBackend vulkanBackend;

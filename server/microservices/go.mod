@@ -1,3 +1,3 @@
-module mmo-backend
+module github.com/coderboysobuj/hello-world/server/microservices
 
-go 1.26.3
+go 1.23.5

@@ -23,23 +23,7 @@ int main(int argc, char* argv[]) {
 
     netManager->SetConnectionCallbacks(
         [&](uint64_t connectionId) {
-            auto playerEntity = ecsWorld.CreateEntity();
-            ecsWorld.AddComponent<mmo::ecs::TransformComponent>(playerEntity, 0.0f, 0.0f, 0.0f);
-            uint32_t netId = ++nextNetworkId;
-            ecsWorld.AddComponent<mmo::ecs::NetworkComponent>(playerEntity, netId);
-            
-            clientMap[connectionId] = playerEntity;
-
-            mmo::network::SpawnEntityPacket packet;
-            packet.header.opcode = mmo::network::OpCode::SpawnEntity;
-            packet.header.size = sizeof(mmo::network::SpawnEntityPacket);
-            packet.networkId = netId;
-            packet.x = 0.0f;
-            packet.y = 0.0f;
-            packet.z = 0.0f;
-
-            netManager->SendMessage(&packet, sizeof(packet));
-            std::cout << "Client " << connectionId << " spawned as entity " << netId << "\n";
+            std::cout << "Client " << connectionId << " connected. Waiting for authentication...\n";
         },
         [&](uint64_t connectionId) {
             auto it = clientMap.find(connectionId);
@@ -55,7 +39,34 @@ int main(int argc, char* argv[]) {
         if (size < sizeof(mmo::network::PacketHeader)) return;
         const auto* header = static_cast<const mmo::network::PacketHeader*>(data);
         
-        if (header->opcode == mmo::network::OpCode::PlayerInput) {
+        if (header->opcode == mmo::network::OpCode::Auth) {
+            const auto* authPacket = static_cast<const mmo::network::AuthPacket*>(data);
+            std::string token(authPacket->token);
+            
+            if (token.find("TOKEN_") == 0) {
+                std::cout << "Client " << connectionId << " authenticated successfully with token: " << token << "\n";
+                
+                auto playerEntity = ecsWorld.CreateEntity();
+                ecsWorld.AddComponent<mmo::ecs::TransformComponent>(playerEntity, 0.0f, 0.0f, 0.0f);
+                uint32_t netId = ++nextNetworkId;
+                ecsWorld.AddComponent<mmo::ecs::NetworkComponent>(playerEntity, netId);
+                
+                clientMap[connectionId] = playerEntity;
+
+                mmo::network::SpawnEntityPacket packet;
+                packet.header.opcode = mmo::network::OpCode::SpawnEntity;
+                packet.header.size = sizeof(mmo::network::SpawnEntityPacket);
+                packet.networkId = netId;
+                packet.x = 0.0f;
+                packet.y = 0.0f;
+                packet.z = 0.0f;
+
+                netManager->SendMessage(&packet, sizeof(packet));
+            } else {
+                std::cerr << "Client " << connectionId << " failed authentication.\n";
+            }
+        }
+        else if (header->opcode == mmo::network::OpCode::PlayerInput) {
             const auto* packet = static_cast<const mmo::network::PlayerInputPacket*>(data);
             auto it = clientMap.find(connectionId);
             if (it != clientMap.end()) {

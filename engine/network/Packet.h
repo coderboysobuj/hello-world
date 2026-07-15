@@ -6,13 +6,19 @@ namespace mmo::network {
         None = 0,
         SpawnEntity = 1,
         UpdateTransform = 2,
-        PlayerInput = 3
+        PlayerInput = 3,
+        Auth = 4
     };
 
     #pragma pack(push, 1)
     struct PacketHeader {
         OpCode opcode;
         uint16_t size;
+    };
+
+    struct AuthPacket {
+        PacketHeader header;
+        char token[64];
     };
 
     struct PlayerInputPacket {
