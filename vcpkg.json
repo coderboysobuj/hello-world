@@ -12,6 +12,7 @@
     "vulkan-memory-allocator",
     "gamenetworkingsockets",
     "glslang",
-    "cpr"
+    "cpr",
+    "glm"
   ]
 }

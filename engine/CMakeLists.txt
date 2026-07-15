@@ -7,10 +7,13 @@ add_library(EngineCore STATIC
 
 target_include_directories(EngineCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+find_package(glm CONFIG REQUIRED)
+
 target_link_libraries(EngineCore PUBLIC 
     SDL2::SDL2main
     SDL2::SDL2
     Vulkan::Vulkan
     GameNetworkingSockets::static
     EnTT::EnTT
+    glm::glm
 )
