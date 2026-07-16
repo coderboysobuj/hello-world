@@ -8,6 +8,8 @@
 #include "../engine/render/VulkanBackend.h"
 #include "../engine/ecs/World.h"
 #include "../engine/ecs/Components.h"
+#include "../engine/render/AssetLoader.h"
+#include "../engine/render/Mesh.h"
 
 int main(int argc, char* argv[]) {
     std::cout << "Starting MMO Game Client...\n";
@@ -38,6 +40,13 @@ int main(int argc, char* argv[]) {
                 auto entity = ecsWorld.CreateEntity();
                 ecsWorld.AddComponent<mmo::ecs::TransformComponent>(entity, packet->x, packet->y, packet->z);
                 ecsWorld.AddComponent<mmo::ecs::NetworkComponent>(entity, packet->networkId);
+                
+                // Add MeshComponent for rendering
+                auto& meshComp = ecsWorld.AddComponent<mmo::ecs::MeshComponent>(entity);
+                meshComp.colorR = 0.2f;
+                meshComp.colorG = 0.5f;
+                meshComp.colorB = 1.0f;
+                
                 networkEntities[packet->networkId] = entity;
                 std::cout << "Spawned Entity ID " << packet->networkId << " at X: " << packet->x << "\n";
             }
@@ -58,6 +67,12 @@ int main(int argc, char* argv[]) {
                 auto entity = ecsWorld.CreateEntity();
                 ecsWorld.AddComponent<mmo::ecs::TransformComponent>(entity, packet->x, packet->y, packet->z);
                 ecsWorld.AddComponent<mmo::ecs::NetworkComponent>(entity, packet->networkId);
+                
+                auto& meshComp = ecsWorld.AddComponent<mmo::ecs::MeshComponent>(entity);
+                meshComp.colorR = 0.2f;
+                meshComp.colorG = 0.5f;
+                meshComp.colorB = 1.0f;
+                
                 networkEntities[packet->networkId] = entity;
             } else {
                 auto entity = networkEntities[packet->networkId];
@@ -111,6 +126,26 @@ int main(int argc, char* argv[]) {
     if (!vulkanBackend.Initialize(app.GetWindowHandle())) {
         std::cerr << "Failed to initialize Vulkan backend.\n";
     }
+
+    // Load assets
+    mmo::render::Mesh playerMesh;
+    if (mmo::render::AssetLoader::LoadModel("cube.obj", playerMesh)) {
+        vulkanBackend.CreateMeshBuffers(playerMesh);
+    }
+
+    // Setup Mesh pointers for existing entities (and future)
+    // Actually, we'll just set it for any entity that gets created. 
+    // We can do this in the loop, or set a global pointer.
+    // For now, let's just make it a global pointer that all new entities use.
+    
+    // Create a Floor entity locally
+    auto floorEntity = ecsWorld.CreateEntity();
+    ecsWorld.AddComponent<mmo::ecs::TransformComponent>(floorEntity, 0.0f, -2.0f, 0.0f);
+    auto& floorMeshComp = ecsWorld.AddComponent<mmo::ecs::MeshComponent>(floorEntity);
+    floorMeshComp.mesh = &playerMesh;
+    floorMeshComp.colorR = 0.8f;
+    floorMeshComp.colorG = 0.8f;
+    floorMeshComp.colorB = 0.8f;
 
     // Initialize Camera State
     float camYaw = 0.0f;
@@ -173,10 +208,20 @@ int main(int argc, char* argv[]) {
             netManager->SendMessage(&inputPacket, sizeof(inputPacket));
         }
 
+        // Assign the loaded mesh to any entities that don't have one yet (e.g. from network)
+        auto view = ecsWorld.GetRegistry().view<mmo::ecs::MeshComponent>();
+        for (auto entity : view) {
+            auto& meshComp = view.get<mmo::ecs::MeshComponent>(entity);
+            if (meshComp.mesh == nullptr && playerMesh.vertexBuffer != VK_NULL_HANDLE) {
+                meshComp.mesh = &playerMesh;
+            }
+        }
+
         vulkanBackend.RenderEntities(ecsWorld);
     });
 
     // Cleanup
+    vulkanBackend.DestroyMesh(playerMesh);
     vulkanBackend.Shutdown();
     netManager->Shutdown();
     delete netManager;

@@ -6,6 +6,7 @@
 
 #include "../ecs/World.h"
 #include "../ecs/Components.h"
+#include "Mesh.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -29,7 +30,11 @@ namespace mmo::render {
         void RenderEntities(mmo::ecs::World& ecsWorld);
         void SetCamera(const glm::vec3& position, const glm::vec3& target);
 
+        bool CreateMeshBuffers(Mesh& mesh);
+        void DestroyMesh(Mesh& mesh);
+
     private:
+        void* m_allocator = nullptr; // Actually VmaAllocator
         glm::vec3 m_cameraPos{0.0f, 5.0f, 12.0f};
         glm::vec3 m_cameraTarget{0.0f, -1.0f, 0.0f};
         SDL_Window* m_window = nullptr;

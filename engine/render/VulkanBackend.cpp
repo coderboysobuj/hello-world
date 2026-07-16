@@ -2,6 +2,9 @@
 #include <iostream>
 #include <set>
 #include <algorithm>
+#include <array>
+#define VMA_IMPLEMENTATION
+#include <vk_mem_alloc.h>
 #include <SDL2/SDL_vulkan.h>
 
 namespace mmo::render {
@@ -19,6 +22,16 @@ namespace mmo::render {
         if (!CreateSurface()) return false;
         if (!PickPhysicalDevice()) return false;
         if (!CreateLogicalDevice()) return false;
+        
+        VmaAllocatorCreateInfo allocatorInfo = {};
+        allocatorInfo.physicalDevice = m_physicalDevice;
+        allocatorInfo.device = m_device;
+        allocatorInfo.instance = m_instance;
+        if (vmaCreateAllocator(&allocatorInfo, (VmaAllocator*)&m_allocator) != VK_SUCCESS) {
+            std::cerr << "Failed to create VMA allocator.\n";
+            return false;
+        }
+
         if (!CreateSwapchain()) return false;
         if (!CreateImageViews()) return false;
         if (!CreateDepthResources()) return false;
@@ -37,6 +50,11 @@ namespace mmo::render {
         if (m_device == VK_NULL_HANDLE) return;
 
         vkDeviceWaitIdle(m_device);
+        
+        if (m_allocator != nullptr) {
+            vmaDestroyAllocator((VmaAllocator)m_allocator);
+            m_allocator = nullptr;
+        }
 
         vkDestroySemaphore(m_device, m_imageAvailableSemaphore, nullptr);
         vkDestroySemaphore(m_device, m_renderFinishedSemaphore, nullptr);
@@ -383,10 +401,33 @@ namespace mmo::render {
 
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, normal);
+
+        attributeDescriptions[2].binding = 0;
+        attributeDescriptions[2].location = 2;
+        attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[2].offset = offsetof(Vertex, color);
+
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        vertexInputInfo.vertexAttributeDescriptionCount = 0;
+        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -602,35 +643,39 @@ namespace mmo::render {
         // GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
         proj[1][1] *= -1;
 
-        auto ecsView = ecsWorld.GetRegistry().view<mmo::ecs::TransformComponent>();
+        auto ecsView = ecsWorld.GetRegistry().view<mmo::ecs::TransformComponent, mmo::ecs::MeshComponent>();
         
-        // 1. Draw a floor (scaled cube on the X-Z plane, like the Unity plane)
-        glm::mat4 floorModel = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f));
-        floorModel = glm::scale(floorModel, glm::vec3(10.0f, 0.1f, 10.0f));
-        PushConstantData floorPc;
-        floorPc.mvp = proj * view * floorModel;
-        floorPc.colorMultiplier = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f); // Light gray floor like Unity
-        vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &floorPc);
-        vkCmdDraw(m_commandBuffer, 36, 1, 0, 0);
-
-        // 2. Draw Entities (Characters)
-        float time = SDL_GetTicks() / 1000.0f; // Get time for animation
-
         for (auto entity : ecsView) {
             auto& transform = ecsView.get<mmo::ecs::TransformComponent>(entity);
+            auto& meshComp = ecsView.get<mmo::ecs::MeshComponent>(entity);
             
-            // Render character exactly at its physics transform
+            if (!meshComp.mesh || meshComp.mesh->vertexBuffer == VK_NULL_HANDLE) continue;
+
             glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(transform.x, transform.y, transform.z));
-            
-            // Add a slow rotation around the Y axis so the user can easily see it is a 3D cube!
-            model = glm::rotate(model, time * 1.5f, glm::vec3(0.0f, 1.0f, 0.0f)); 
+
+            // If it's scaled, we need a scale component. But for now we can infer from the component.
+            // A quick hack for the floor since we removed the hardcoded one: 
+            // if y == -2.0f it's probably the floor. We should add a ScaleComponent in the future.
+            if (transform.y == -2.0f) {
+                model = glm::scale(model, glm::vec3(10.0f, 0.1f, 10.0f));
+            }
             
             PushConstantData pc;
             pc.mvp = proj * view * model;
-            pc.colorMultiplier = glm::vec4(0.2f, 0.5f, 1.0f, 1.0f); // Blue character
+            pc.colorMultiplier = glm::vec4(meshComp.colorR, meshComp.colorG, meshComp.colorB, 1.0f);
             
             vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &pc);
-            vkCmdDraw(m_commandBuffer, 36, 1, 0, 0); // Drawing a 36-vertex cube
+            
+            VkBuffer vertexBuffers[] = { meshComp.mesh->vertexBuffer };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(m_commandBuffer, 0, 1, vertexBuffers, offsets);
+            
+            if (meshComp.mesh->indexBuffer != VK_NULL_HANDLE) {
+                vkCmdBindIndexBuffer(m_commandBuffer, meshComp.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+                vkCmdDrawIndexed(m_commandBuffer, static_cast<uint32_t>(meshComp.mesh->indices.size()), 1, 0, 0, 0);
+            } else {
+                vkCmdDraw(m_commandBuffer, static_cast<uint32_t>(meshComp.mesh->vertices.size()), 1, 0, 0);
+            }
         }
     }
 
@@ -677,12 +722,73 @@ namespace mmo::render {
     uint32_t VulkanBackend::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memProperties;
         vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
         for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
             if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
                 return i;
             }
         }
-        return 0;
+        throw std::runtime_error("failed to find suitable memory type!");
+    }
+
+    bool VulkanBackend::CreateMeshBuffers(Mesh& mesh) {
+        if (!m_allocator) return false;
+        
+        VmaAllocator allocator = (VmaAllocator)m_allocator;
+
+        // Create Vertex Buffer
+        VkBufferCreateInfo vertexBufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        vertexBufferInfo.size = sizeof(Vertex) * mesh.vertices.size();
+        vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU; // Allow mapping to copy data
+
+        if (vmaCreateBuffer(allocator, &vertexBufferInfo, &allocInfo, &mesh.vertexBuffer, (VmaAllocation*)&mesh.vertexAllocation, nullptr) != VK_SUCCESS) {
+            std::cerr << "Failed to create vertex buffer\n";
+            return false;
+        }
+
+        // Copy vertex data
+        void* data;
+        vmaMapMemory(allocator, (VmaAllocation)mesh.vertexAllocation, &data);
+        memcpy(data, mesh.vertices.data(), (size_t)vertexBufferInfo.size);
+        vmaUnmapMemory(allocator, (VmaAllocation)mesh.vertexAllocation);
+
+        // Create Index Buffer
+        if (!mesh.indices.empty()) {
+            VkBufferCreateInfo indexBufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+            indexBufferInfo.size = sizeof(uint32_t) * mesh.indices.size();
+            indexBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
+            if (vmaCreateBuffer(allocator, &indexBufferInfo, &allocInfo, &mesh.indexBuffer, (VmaAllocation*)&mesh.indexAllocation, nullptr) != VK_SUCCESS) {
+                std::cerr << "Failed to create index buffer\n";
+                return false;
+            }
+
+            // Copy index data
+            vmaMapMemory(allocator, (VmaAllocation)mesh.indexAllocation, &data);
+            memcpy(data, mesh.indices.data(), (size_t)indexBufferInfo.size);
+            vmaUnmapMemory(allocator, (VmaAllocation)mesh.indexAllocation);
+        }
+
+        return true;
+    }
+
+    void VulkanBackend::DestroyMesh(Mesh& mesh) {
+        if (!m_allocator) return;
+        VmaAllocator allocator = (VmaAllocator)m_allocator;
+
+        if (mesh.vertexBuffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(allocator, mesh.vertexBuffer, (VmaAllocation)mesh.vertexAllocation);
+            mesh.vertexBuffer = VK_NULL_HANDLE;
+            mesh.vertexAllocation = nullptr;
+        }
+        if (mesh.indexBuffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(allocator, mesh.indexBuffer, (VmaAllocation)mesh.indexAllocation);
+            mesh.indexBuffer = VK_NULL_HANDLE;
+            mesh.indexAllocation = nullptr;
+        }
     }
 
     bool VulkanBackend::CreateDepthResources() {

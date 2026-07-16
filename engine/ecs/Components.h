@@ -2,6 +2,7 @@
 #include <cstdint>
 
 namespace reactphysics3d { class RigidBody; }
+namespace mmo::render { struct Mesh; }
 
 namespace mmo::ecs {
     struct TransformComponent {
@@ -17,5 +18,13 @@ namespace mmo::ecs {
 
     struct PhysicsComponent {
         reactphysics3d::RigidBody* body = nullptr;
+    };
+
+    struct MeshComponent {
+        class render::Mesh* mesh = nullptr;
+        // Optionally store a color override or material reference here
+        float colorR = 1.0f;
+        float colorG = 1.0f;
+        float colorB = 1.0f;
     };
 }
