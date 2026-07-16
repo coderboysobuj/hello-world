@@ -587,11 +587,15 @@ namespace mmo::render {
         vkCmdBeginRenderPass(m_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
 
+    void VulkanBackend::SetCamera(const glm::vec3& position, const glm::vec3& target) {
+        m_cameraPos = position;
+        m_cameraTarget = target;
+    }
+
     void VulkanBackend::RenderEntities(mmo::ecs::World& ecsWorld) {
         vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-        // Camera slightly above and behind, looking down at the center, matching the Unity screenshot
-        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 5.0f, 12.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 view = glm::lookAt(m_cameraPos, m_cameraTarget, glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 proj = glm::perspective(glm::radians(45.0f), 
                                           m_swapchainExtent.width / (float) m_swapchainExtent.height, 
                                           0.1f, 100.0f);

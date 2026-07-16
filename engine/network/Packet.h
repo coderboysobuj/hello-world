@@ -7,7 +7,8 @@ namespace mmo::network {
         SpawnEntity = 1,
         UpdateTransform = 2,
         PlayerInput = 3,
-        Auth = 4
+        Auth = 4,
+        SetLocalPlayer = 5
     };
 
     #pragma pack(push, 1)
@@ -26,6 +27,7 @@ namespace mmo::network {
         float inputX; // -1 to 1 (A/D)
         float inputY; // -1 to 1 (W/S)
         bool jump;    // Spacebar
+        float yaw;    // Camera yaw in radians
     };
 
     struct SpawnEntityPacket {
@@ -38,6 +40,11 @@ namespace mmo::network {
         PacketHeader header;
         uint32_t networkId;
         float x, y, z;
+    };
+
+    struct SetLocalPlayerPacket {
+        PacketHeader header;
+        uint32_t networkId;
     };
     #pragma pack(pop)
 }

@@ -12,6 +12,7 @@ namespace mmo::ecs {
 
     struct NetworkComponent {
         uint32_t networkId = 0;
+        bool isLocalPlayer = false;
     };
 
     struct PhysicsComponent {

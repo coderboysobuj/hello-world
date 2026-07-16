@@ -103,6 +103,12 @@ namespace mmo::network {
             }
         }
 
+        void SendMessageTo(uint64_t connectionId, const void* data, size_t size) override {
+            if (m_isServer && m_interface) {
+                m_interface->SendMessageToConnection((HSteamNetConnection)connectionId, data, size, k_nSteamNetworkingSend_Reliable, nullptr);
+            }
+        }
+
         void SetReceiveCallback(ReceiveCallback callback) override {
             m_receiveCallback = callback;
         }

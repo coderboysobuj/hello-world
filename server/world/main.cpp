@@ -2,6 +2,7 @@
 #include <thread>
 #include <chrono>
 #include <unordered_map>
+#include <cmath>
 #include "../engine/network/NetworkManager.h"
 #include "../engine/network/Packet.h"
 #include "../engine/ecs/World.h"
@@ -103,6 +104,12 @@ int main(int argc, char* argv[]) {
                 packet.z = 0.0f;
 
                 netManager->SendMessage(&packet, sizeof(packet));
+
+                mmo::network::SetLocalPlayerPacket localPlayerPacket;
+                localPlayerPacket.header.opcode = mmo::network::OpCode::SetLocalPlayer;
+                localPlayerPacket.header.size = sizeof(mmo::network::SetLocalPlayerPacket);
+                localPlayerPacket.networkId = netId;
+                netManager->SendMessageTo(connectionId, &localPlayerPacket, sizeof(localPlayerPacket));
             } else {
                 std::cerr << "Client " << connectionId << " failed authentication.\n";
             }
@@ -115,8 +122,15 @@ int main(int argc, char* argv[]) {
                 if (physComp.body) {
                     rp3d::Vector3 vel = physComp.body->getLinearVelocity();
                     const float moveSpeed = 5.0f;
-                    vel.x = packet->inputX * moveSpeed;
-                    vel.z = packet->inputY * moveSpeed;
+                    
+                    float forwardX = std::sin(packet->yaw);
+                    float forwardZ = -std::cos(packet->yaw);
+                    
+                    float rightX = std::cos(packet->yaw);
+                    float rightZ = std::sin(packet->yaw);
+                    
+                    vel.x = (rightX * packet->inputX + forwardX * packet->inputY) * moveSpeed;
+                    vel.z = (rightZ * packet->inputX + forwardZ * packet->inputY) * moveSpeed;
 
                     if (packet->jump) {
                         // Apply a jump impulse if not already moving much upwards
