@@ -130,12 +130,27 @@ int main(int argc, char* argv[]) {
 
     // Load assets
     mmo::render::Mesh playerMesh;
-    if (mmo::render::AssetLoader::LoadModel("cube.obj", playerMesh)) {
-        vulkanBackend.CreateMeshBuffers(playerMesh);
+    if (!mmo::render::AssetLoader::LoadModel("assets/character.obj", playerMesh)) {
+        std::cerr << "Failed to load character.obj\n";
+        return -1;
     }
+    vulkanBackend.CreateMeshBuffers(playerMesh);
+
+    mmo::render::Mesh levelMesh;
+    if (!mmo::render::AssetLoader::LoadModel("assets/level.obj", levelMesh)) {
+        std::cerr << "Failed to load level.obj\n";
+        return -1;
+    }
+    vulkanBackend.CreateMeshBuffers(levelMesh);
 
     mmo::render::Texture checkerTexture;
-    if (!vulkanBackend.CreateTexture("checkerboard.png", checkerTexture)) {
+    vulkanBackend.CreateTexture("assets/character.png", checkerTexture);
+    mmo::render::Texture levelTexture;
+    if (!vulkanBackend.CreateTexture("assets/level.png", levelTexture)) {
+        std::cerr << "Failed to load level texture\n";
+        return -1;
+    }
+    if (false) {
         std::cerr << "Failed to load checkerboard.png\n";
     }
 
@@ -146,10 +161,10 @@ int main(int argc, char* argv[]) {
     
     // Create a Floor entity locally
     auto floorEntity = ecsWorld.CreateEntity();
-    ecsWorld.AddComponent<mmo::ecs::TransformComponent>(floorEntity, 0.0f, -2.0f, 0.0f);
+    ecsWorld.AddComponent<mmo::ecs::TransformComponent>(floorEntity, 0.0f, 0.0f, 0.0f);
     auto& floorMeshComp = ecsWorld.AddComponent<mmo::ecs::MeshComponent>(floorEntity);
-    floorMeshComp.mesh = &playerMesh;
-    floorMeshComp.texture = &checkerTexture;
+    floorMeshComp.mesh = &levelMesh;
+    floorMeshComp.texture = &levelTexture;
     floorMeshComp.colorR = 0.8f;
     floorMeshComp.colorG = 0.8f;
     floorMeshComp.colorB = 0.8f;
@@ -230,7 +245,9 @@ int main(int argc, char* argv[]) {
 
     // Cleanup
     vulkanBackend.DestroyTexture(checkerTexture);
+    vulkanBackend.DestroyTexture(levelTexture);
     vulkanBackend.DestroyMesh(playerMesh);
+    vulkanBackend.DestroyMesh(levelMesh);
     vulkanBackend.Shutdown();
     netManager->Shutdown();
     delete netManager;
