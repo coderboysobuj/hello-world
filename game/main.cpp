@@ -10,6 +10,7 @@
 #include "../engine/ecs/Components.h"
 #include "../engine/render/AssetLoader.h"
 #include "../engine/render/Mesh.h"
+#include "../engine/render/Texture.h"
 
 int main(int argc, char* argv[]) {
     std::cout << "Starting MMO Game Client...\n";
@@ -133,6 +134,11 @@ int main(int argc, char* argv[]) {
         vulkanBackend.CreateMeshBuffers(playerMesh);
     }
 
+    mmo::render::Texture checkerTexture;
+    if (!vulkanBackend.CreateTexture("checkerboard.png", checkerTexture)) {
+        std::cerr << "Failed to load checkerboard.png\n";
+    }
+
     // Setup Mesh pointers for existing entities (and future)
     // Actually, we'll just set it for any entity that gets created. 
     // We can do this in the loop, or set a global pointer.
@@ -143,6 +149,7 @@ int main(int argc, char* argv[]) {
     ecsWorld.AddComponent<mmo::ecs::TransformComponent>(floorEntity, 0.0f, -2.0f, 0.0f);
     auto& floorMeshComp = ecsWorld.AddComponent<mmo::ecs::MeshComponent>(floorEntity);
     floorMeshComp.mesh = &playerMesh;
+    floorMeshComp.texture = &checkerTexture;
     floorMeshComp.colorR = 0.8f;
     floorMeshComp.colorG = 0.8f;
     floorMeshComp.colorB = 0.8f;
@@ -214,6 +221,7 @@ int main(int argc, char* argv[]) {
             auto& meshComp = view.get<mmo::ecs::MeshComponent>(entity);
             if (meshComp.mesh == nullptr && playerMesh.vertexBuffer != VK_NULL_HANDLE) {
                 meshComp.mesh = &playerMesh;
+                meshComp.texture = &checkerTexture;
             }
         }
 
@@ -221,6 +229,7 @@ int main(int argc, char* argv[]) {
     });
 
     // Cleanup
+    vulkanBackend.DestroyTexture(checkerTexture);
     vulkanBackend.DestroyMesh(playerMesh);
     vulkanBackend.Shutdown();
     netManager->Shutdown();

@@ -4,6 +4,9 @@
 #include <assimp/postprocess.h>
 #include <iostream>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 namespace mmo::render {
 
     bool AssetLoader::LoadModel(const std::string& filepath, Mesh& outMesh) {
@@ -42,8 +45,13 @@ namespace mmo::render {
                 vertex.normal = glm::vec3(0.0f, 1.0f, 0.0f);
             }
 
-            // For now, give a default color (white). 
-            // In a real material system we'd use textures or vertex colors
+            // Texture coordinates
+            if (mesh->mTextureCoords[0]) {
+                vertex.texCoord = glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
+            } else {
+                vertex.texCoord = glm::vec2(0.0f, 0.0f);
+            }
+
             vertex.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
             outMesh.vertices.push_back(vertex);
@@ -58,6 +66,22 @@ namespace mmo::render {
 
         std::cout << "Successfully loaded " << filepath << " with " << outMesh.vertices.size() << " vertices and " << outMesh.indices.size() << " indices.\n";
         return true;
+    }
+
+    bool AssetLoader::LoadTextureData(const std::string& filepath, unsigned char*& outPixels, int& outWidth, int& outHeight, int& outChannels) {
+        // Load image enforcing 4 channels (RGBA)
+        outPixels = stbi_load(filepath.c_str(), &outWidth, &outHeight, &outChannels, STBI_rgb_alpha);
+        if (!outPixels) {
+            std::cerr << "Failed to load texture image: " << filepath << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    void AssetLoader::FreeTextureData(unsigned char* pixels) {
+        if (pixels) {
+            stbi_image_free(pixels);
+        }
     }
 
 }

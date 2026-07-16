@@ -72,6 +72,9 @@ namespace mmo::render {
 
         uint32_t m_imageIndex = 0;
 
+        VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
+        VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+
         bool CreateInstance();
         bool CreateSurface();
         bool PickPhysicalDevice();
@@ -79,13 +82,26 @@ namespace mmo::render {
         bool CreateSwapchain();
         bool CreateImageViews();
         bool CreateRenderPass();
+        bool CreateDescriptorSetLayout();
         bool CreateGraphicsPipeline();
         bool CreateDepthResources();
         VkShaderModule CreateShaderModule(const std::vector<char>& code);
         bool CreateFramebuffers();
         bool CreateCommandPool();
+        bool CreateDescriptorPool();
         bool CreateCommandBuffer();
         bool CreateSyncObjects();
         uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+    public:
+        // Texture handling
+        bool CreateTexture(const std::string& filepath, class Texture& outTexture);
+        void DestroyTexture(class Texture& texture);
+        
+    private:
+        VkCommandBuffer BeginSingleTimeCommands();
+        void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+        void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+        void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
     };
 }
