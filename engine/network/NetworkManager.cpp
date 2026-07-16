@@ -37,7 +37,7 @@ namespace mmo::network {
                 m_listenSocket = k_HSteamListenSocket_Invalid;
             }
             if (m_connection != k_HSteamNetConnection_Invalid) {
-                m_interface->CloseConnection(m_connection, 0, "Application quitting", true);
+                m_interface->CloseConnection(m_connection, 0, "Application quitting", false);
                 m_connection = k_HSteamNetConnection_Invalid;
             }
             if (m_pollGroup != k_HSteamNetPollGroup_Invalid) {

@@ -32,7 +32,12 @@ namespace mmo::core {
 
     void Application::Run(mmo::render::RHI* rhi, mmo::network::NetworkManager* net, std::function<void()> onUpdate) {
         SDL_Event event;
+        const int TARGET_FPS = 60;
+        const int FRAME_DELAY = 1000 / TARGET_FPS;
+
         while (m_isRunning) {
+            Uint32 frameStart = SDL_GetTicks();
+
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_QUIT) {
                     m_isRunning = false;
@@ -49,6 +54,11 @@ namespace mmo::core {
             }
             if (rhi) {
                 rhi->EndFrame();
+            }
+
+            Uint32 frameTime = SDL_GetTicks() - frameStart;
+            if (FRAME_DELAY > frameTime) {
+                SDL_Delay(FRAME_DELAY - frameTime);
             }
         }
     }
